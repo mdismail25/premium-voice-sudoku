@@ -1,0 +1,117 @@
+
+/* animated-bg/animated-bg.css
+   Adds a fixed full-viewport background with parallax tree/bush layers and style for canvas birds.
+   Pointer-events are disabled so it won't interfere with page interaction.
+*/
+#animated-bg-container{
+  position:fixed;
+  inset:0;
+  width:100%;
+  height:100%;
+  pointer-events:none;
+  z-index:-9999; /* place behind most content */
+  overflow:hidden;
+  background: linear-gradient(180deg, rgba(135,206,235,0.35) 0%, rgba(255,255,255,0) 100%);
+  will-change: transform;
+}
+
+#animated-bg-canvas{
+  position:absolute;
+  left:0;
+  top:0;
+  width:100%;
+  height:100%;
+  display:block;
+  z-index:1;
+  mix-blend-mode:normal;
+  image-rendering:optimizeSpeed;
+}
+
+.animated-bg-parallax{
+  position:absolute;
+  left:0;
+  bottom:0;
+  width:200%;
+  height:45%;
+  transform:translate3d(0,10%,0);
+  z-index:0;
+  opacity:0.95;
+}
+
+/* Trees (far) */
+.animated-bg-parallax .trees{
+  position:absolute;
+  left:0;
+  bottom:0;
+  width:100%;
+  height:100%;
+  background-image: url("data:image/svg+xml;utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='1600' height='400'%3E%3Cg%3E%3Crect width='1600' height='400' fill='transparent'/%3E%3Cpath d='M0 300 C100 250 200 260 300 300 C400 330 500 300 600 310 C700 320 800 300 900 310 C1000 320 1100 300 1200 310 C1300 320 1400 300 1500 310 C1600 320 1600 400 0 400 Z' fill='%23334d2c'/%3E%3C/g%3E%3C/svg%3E");
+  background-repeat: repeat-x;
+  background-size: contain;
+  transform-origin:center bottom;
+  animation: panSlow 60s linear infinite, swayFar 6s ease-in-out infinite;
+  opacity:0.85;
+}
+
+/* Bushes (near) */
+.animated-bg-parallax .bushes{
+  position:absolute;
+  left:0;
+  bottom:0;
+  width:100%;
+  height:70%;
+  background-image: url("data:image/svg+xml;utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='1600' height='400'%3E%3Cpath d='M0 220 C80 180 160 210 240 190 C320 170 400 210 480 190 C560 170 640 210 720 190 C800 170 880 210 960 190 C1040 170 1120 210 1200 190 C1280 170 1360 210 1600 190 L1600 400 L0 400 Z' fill='%23427a3f'/%3E%3C/svg%3E");
+  background-repeat: repeat-x;
+  background-size: contain;
+  transform-origin:center bottom;
+  animation: pan 25s linear infinite, swayNear 4s ease-in-out infinite;
+  opacity:0.98;
+  filter: drop-shadow(0 10px 8px rgba(0,0,0,0.12));
+}
+
+/* subtle darker ground */
+.animated-bg-parallax::after{
+  content:"";
+  position:absolute;
+  left:0;
+  bottom:0;
+  width:100%;
+  height:30%;
+  background: linear-gradient(180deg, rgba(0,0,0,0) 0%, rgba(0,0,0,0.15) 100%);
+  pointer-events:none;
+}
+
+/* animations */
+@keyframes pan {
+  from{ transform: translateX(0); }
+  to{ transform: translateX(-50%); }
+}
+@keyframes panSlow {
+  from{ transform: translateX(0); }
+  to{ transform: translateX(-30%); }
+}
+@keyframes swayNear {
+  0%{ transform: translateX(0) translateY(0) rotate(0.001deg); }
+  50%{ transform: translateX(0) translateY(-6px) rotate(-0.3deg); }
+  100%{ transform: translateX(0) translateY(0) rotate(0.001deg); }
+}
+@keyframes swayFar {
+  0%{ transform: translateX(0) translateY(0) scale(1); }
+  50%{ transform: translateX(0) translateY(-2px) scale(1.01); }
+  100%{ transform: translateX(0) translateY(0) scale(1); }
+}
+
+/* bird styles (canvas handles appearance) */
+.animated-bg-bird{
+  position:absolute;
+  width:36px;
+  height:36px;
+  opacity:0.95;
+}
+
+/* lower the impact on performance on small screens */
+@media (max-width:600px){
+  .animated-bg-parallax{ height:40%; }
+  .animated-bg-parallax .trees{ animation-duration:120s; }
+  .animated-bg-parallax .bushes{ animation-duration:40s; }
+}

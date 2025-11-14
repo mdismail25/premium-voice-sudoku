@@ -1,0 +1,73 @@
+/* butterfly.css - neon butterfly background styles */
+:root{
+  --butterfly-color: #8ff;        /* neon cyan */
+  --butterfly-accent: #ff6ec7;    /* neon pink */
+  --butterfly-glow: 0 0 12px rgba(142,255,255,0.15), 0 0 30px rgba(142,255,255,0.08);
+  --butterfly-size-min: 32px;
+  --butterfly-size-max: 84px;
+  --butterfly-opacity: 0.85;
+  --butterfly-blend: screen;
+}
+
+/* container sits behind app content */
+.butterfly-bg {
+  position: fixed;
+  inset: 0;
+  z-index: -4;
+  pointer-events: none;
+  overflow: hidden;
+  contain: paint;
+}
+
+/* each butterfly is absolutely positioned using transform */
+.butterfly {
+  position: absolute;
+  width: var(--butterfly-size, 48px);
+  height: auto;
+  opacity: var(--butterfly-opacity);
+  filter: drop-shadow(0 0 8px rgba(0,0,0,0.12));
+  mix-blend-mode: var(--butterfly-blend);
+  will-change: transform, opacity;
+  transition: opacity 350ms linear;
+}
+
+/* svg styling: neon look */
+.butterfly svg {
+  width: 100%;
+  height: auto;
+  display: block;
+  overflow: visible;
+  filter: drop-shadow(0 0 6px rgba(0,255,255,0.15)) drop-shadow(0 0 18px rgba(255,110,199,0.06));
+}
+
+/* wings: inner glow and stroke */
+.butterfly .wing {
+  fill: none;
+  stroke: var(--butterfly-color);
+  stroke-width: 1.8;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+  vector-effect: non-scaling-stroke;
+  opacity: 0.95;
+  filter: url(#neon);
+}
+
+/* wing interior */
+.butterfly .wing-fill {
+  fill: url(#grad);
+  opacity: 0.26;
+}
+
+/* antenna / body */
+.butterfly .body {
+  stroke: var(--butterfly-accent);
+  stroke-width: 1.2;
+  opacity: 0.9;
+}
+
+.butterfly.small { opacity: 0.78; }
+.butterfly.tiny  { opacity: 0.64; }
+
+@media (prefers-reduced-motion: reduce) {
+  .butterfly { transition: none !important; animation: none !important; transform: translate(0,0) scale(1) !important; opacity: 0.9 !important; }
+}

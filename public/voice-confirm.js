@@ -1,0 +1,2 @@
+// voice-confirm.js - applies confirmed voice commands
+window.handleConfirmedVoice = function(transcript){ try{ const t = transcript.toLowerCase(); const num = t.match(/\b([1-9])\b/); if(num && typeof insert === 'function') { insert(parseInt(num[1],10)); return; } if (typeof window.handleConfirmedVoiceProxy === 'function') { window.handleConfirmedVoiceProxy(t); return; } console.log('[voice-confirm] no known handler to apply transcript:', t); }catch(e){ console.error(e); } };

@@ -1,0 +1,224 @@
+@import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@600&family=Nunito:wght@400;700&display=swap');
+
+:root {
+  --deep: #001524;
+  --mid: #00314f;
+  --light: #007b9e;
+  --aqua: #00e5ff;
+  --accent: #00ffd6;
+  --bubble: rgba(255,255,255,0.15);
+  --glass: rgba(255,255,255,0.05);
+  --muted: rgba(255,255,255,0.6);
+}
+
+/* Basic setup */
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { height: 100%; width: 100%; overflow: hidden; }
+
+body {
+  font-family: 'Nunito', sans-serif;
+  background: radial-gradient(circle at bottom, var(--deep), var(--mid), var(--light));
+  color: #e6faff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0;
+}
+
+/* Animated ocean background (layers: radial, fish) */
+body::before {
+  content: "";
+  position: absolute;
+  width: 200%;
+  height: 200%;
+  top: -50%;
+  left: -50%;
+  background: radial-gradient(circle at 50% 50%, rgba(0,229,255,0.05) 0%, transparent 70%);
+  animation: oceanFlow 25s linear infinite;
+  z-index: -4;
+}
+@keyframes oceanFlow {
+  0% { transform: translate(0,0) rotate(0deg); }
+  100% { transform: translate(10%, 10%) rotate(360deg); }
+}
+body::after {
+  content: "";
+  position: absolute;
+  width: 200%;
+  height: 200%;
+  top: -50%;
+  left: -50%;
+  background: url('https://upload.wikimedia.org/wikipedia/commons/7/70/Fish_emoji_u1f41f.svg') repeat-x;
+  background-size: 60px;
+  animation: fishSwim 40s linear infinite;
+  opacity: 0.28;
+  z-index: -4;
+}
+@keyframes fishSwim {
+  0% { background-position-x: -200px; }
+  100% { background-position-x: 2000px; }
+}
+
+/* Floating bubbles */
+@keyframes bubbleRise {
+  0% { transform: translateY(0) scale(1); opacity: 0.4; }
+  100% { transform: translateY(-120vh) scale(1.2); opacity: 0; }
+}
+.bubble { position: absolute; bottom: -50px; border-radius: 50%; background: var(--bubble); animation: bubbleRise linear infinite; z-index: -3; }
+
+/* Main container */
+.app {
+  position: relative;
+  width: 95%;
+  max-width: 960px;
+  padding: 24px;
+  border-radius: 22px;
+  background: rgba(0, 25, 40, 0.65);
+  border: 1px solid rgba(0,229,255,0.15);
+  -webkit-backdrop-filter: blur();
+  backdrop-filter: blur(10px);
+  box-shadow: 0 0 40px rgba(0,255,255,0.2), inset 0 0 20px rgba(0,255,255,0.1);
+  overflow: hidden;
+}
+
+/* Title */
+.header { text-align: center; margin-bottom: 14px; }
+.header h1 {
+  font-family: 'Orbitron', sans-serif;
+  color: var(--aqua);
+  font-size: 2.2rem;
+  text-shadow: 0 0 16px var(--aqua), 0 0 30px #00b3ff;
+}
+.subtitle { font-size: 0.95rem; color: var(--muted); }
+
+/* Centering helpers */
+.board-area { display: flex; justify-content: center; margin: 12px 0; }
+
+/* Grid */
+.grid {
+  display: grid;
+  grid-template-columns: repeat(9, 52px);
+  grid-template-rows: repeat(9, 52px);
+  gap: 0;
+  padding: 10px;
+  border-radius: 16px;
+  background: linear-gradient(180deg, rgba(0,80,120,0.4), rgba(0,120,150,0.3));
+  box-shadow: 0 0 40px rgba(0,255,255,0.12), inset 0 0 60px rgba(0,255,255,0.1);
+  position: relative;
+  animation: gridGlow 5s ease-in-out infinite alternate;
+  margin: 0 auto;
+}
+@keyframes gridGlow {
+  from { box-shadow: 0 0 40px rgba(0,255,255,0.1), inset 0 0 20px rgba(0,255,255,0.05); }
+  to { box-shadow: 0 0 60px rgba(0,255,255,0.3), inset 0 0 40px rgba(0,255,255,0.15); }
+}
+
+/* Cells */
+.cell {
+  display: flex; align-items: center; justify-content: center;
+  font-family: 'Orbitron', sans-serif; font-weight: 700;
+  color: #bffaff; background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(0,229,255,0.08);
+  font-size: 1.25rem; cursor: pointer; transition: all 0.25s ease;
+}
+.cell:nth-child(3n) { border-right: 2px solid rgba(0,229,255,0.4); }
+.cell:nth-child(n+19):nth-child(-n+27), .cell:nth-child(n+46):nth-child(-n+54), .cell:nth-child(n+73):nth-child(-n+81) { border-bottom: 2px solid rgba(0,229,255,0.4); }
+.cell:nth-child(-n+9) { border-top: 2px solid rgba(0,229,255,0.4); }
+.cell:nth-child(9n+1) { border-left: 2px solid rgba(0,229,255,0.4); }
+.cell:hover { transform: scale(1.06); box-shadow: 0 0 20px rgba(0,255,255,0.3); background: rgba(0,229,255,0.1); }
+.cell.selected { background: linear-gradient(180deg, rgba(0,229,255,0.2), rgba(0,255,255,0.08)); box-shadow: 0 0 25px rgba(0,255,255,0.4); transform: scale(1.05); }
+.cell.prefilled { color: #a9f1ff; font-weight: 800; }
+.cell.invalid { background: rgba(255, 80, 80, 0.2); color: #ffd6d6; }
+
+/* Controls row */
+.controls { margin-top: 14px; display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+.toolbar { display:flex; gap:10px; align-items:center; justify-content:center; flex-wrap:wrap; }
+.voice-area { display:flex; gap:8px; align-items:center; }
+
+/* Buttons */
+.btn {
+  background: linear-gradient(135deg, #00bcd4, #00e5ff);
+  color: #001622; font-weight: 700; border: none; border-radius: 12px;
+  padding: 10px 14px; box-shadow: 0 6px 18px rgba(0,255,255,0.12); cursor: pointer; transition: all 0.18s ease;
+  min-width: 90px;
+}
+.btn.large { padding: 12px 18px; min-width: 120px; font-size: 1rem; border-radius: 14px; }
+.btn.accent { background: linear-gradient(135deg, #00ffd6, #00e5ff); color: #002026; box-shadow: 0 8px 24px rgba(0,255,200,0.15); }
+.btn-voice[aria-pressed="true"] { outline: 3px solid rgba(0,255,255,0.18); }
+
+/* Keypad centered */
+.num-pad {
+  margin: 16px auto 0 auto; display: flex; flex-direction: column; align-items: center; gap: 8px; width: fit-content;
+}
+.pad-row { display: flex; gap: 8px; }
+.pad {
+  width: 64px; height: 44px; background: rgba(0,255,255,0.05);
+  color: var(--aqua); font-weight: 800; border-radius: 10px; border: 1px solid rgba(0,255,255,0.08);
+  cursor: pointer; transition: all 0.25s ease;
+}
+.pad:hover { background: rgba(0,255,255,0.12); transform: scale(1.05); box-shadow: 0 0 15px rgba(0,255,255,0.2); }
+
+/* Status & footer */
+.status { margin-top: 10px; text-align: center; }
+.voice-status { color: var(--aqua); text-shadow: 0 0 8px var(--aqua); font-weight: 700; }
+.message { color: rgba(191,239,255,0.85); margin-top: 4px; }
+.footer { margin-top: 16px; text-align:center; color: rgba(191,239,255,0.7); font-size:0.9rem; }
+
+/* Hint pulse */
+@keyframes hintPulse {
+  0% { box-shadow: 0 0 0 0 rgba(0,255,200,0.35); transform: scale(1); }
+  60% { box-shadow: 0 0 30px 8px rgba(0,255,200,0.06); transform: scale(1.04); }
+  100% { box-shadow: 0 0 0 0 rgba(0,255,200,0); transform: scale(1); }
+}
+.cell.hint-pulse { animation: hintPulse 1.4s ease-out both; border-color: rgba(0,255,200,0.6) !important; }
+
+/* Responsive */
+@media (max-width:640px) {
+  .grid { grid-template-columns: repeat(9, 38px); grid-template-rows: repeat(9, 38px); }
+  .cell { font-size: 1rem; }
+  .pad { width: 48px; height: 40px; }
+  .btn.large { min-width: 80px; padding: 10px 12px; font-size: 0.92rem; }
+  .toolbar { gap: 6px; }
+}
+
+/* Neon animated background canvas kept if used by main.js (z-index ordering) */
+#neonCanvas {
+  position: fixed; top:0; left:0; width:100vw; height:100vh; z-index:-3;
+}
+
+/* New layered canvases: butterflies & fireflies */
+#butterflyCanvas, #fireflyCanvas {
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  height: 100vh;
+  pointer-events: none;
+  mix-blend-mode: screen;
+  z-index: -2; /* sits above neonCanvas but behind UI (.app) */
+}
+
+/* Place fireflyCanvas on top of butterflies to get nice micro-particles */
+#fireflyCanvas { z-index: -1; }
+
+/* Utility */
+.current-cell { outline:2px solid #0ff !important; box-shadow:0 0 10px #0ff; }
+button:disabled { opacity:0.45; pointer-events: none; }
+/* Ultimate BG canvas */
+#ULTIMATE_BG {
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  height: 100vh;
+  z-index: -1;
+  pointer-events: none;
+  mix-blend-mode: screen;
+}
+#ULTIMATE_GOD_BG {
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  height: 100vh;
+  z-index: -1;
+  pointer-events: none;
+  mix-blend-mode: screen;
+}

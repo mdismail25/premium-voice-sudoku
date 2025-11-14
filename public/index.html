@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Premium Voice Sudoku</title>
+  <link rel="stylesheet" href="style.css" />
+  <link rel="stylesheet" href="animated-bg/final.css">
+</head>
+<body>
+  <!-- neon canvas (kept as before) -->
+  <canvas id="neonCanvas"></canvas>
+
+  <!-- new layered canvases for butterflies & fireflies -->
+  <canvas id="butterflyCanvas"></canvas>
+  <canvas id="fireflyCanvas"></canvas>
+
+  <noscript id="animated-bg-noscript">
+    <div style="position:fixed;right:12px;bottom:12px;background:#111;color:#fff;padding:6px 8px;border-radius:8px;font-size:12px;z-index:99999">
+      Background: JS disabled
+    </div>
+  </noscript>
+
+  <main class="app">
+    <header class="header">
+      <h1>🧠 Premium Voice Sudoku</h1>
+      <p class="subtitle">Voice-first controls | Move: up/down/left/right → Say number to insert</p>
+    </header>
+
+    <section class="board-area">
+      <div id="game-grid" class="grid" role="grid" aria-label="Sudoku grid"></div>
+    </section>
+
+    <!-- Redesigned controls layout: single toolbar -->
+    <section class="controls" aria-label="Game controls">
+      <div class="toolbar">
+        <button id="new-game" class="btn large">New Game</button>
+        <button id="solve" class="btn large">Solve</button>
+        <button id="hintBtn" class="btn accent large">Hint</button>
+      </div>
+
+      <div class="voice-area">
+        <button id="listen" class="btn btn-voice" aria-pressed="false">🎙️ Voice</button>
+        <button id="stop-voice" class="btn btn-muted" hidden>Stop</button>
+      </div>
+    </section>
+
+    <section class="status">
+      <div id="voice-status" class="voice-status" aria-live="polite">Not listening</div>
+      <div id="message" class="message" aria-live="polite"></div>
+    </section>
+
+    <section id="num-pad" class="num-pad" aria-label="Number pad">
+      <div class="pad-row">
+        <button class="pad">1</button><button class="pad">2</button><button class="pad">3</button>
+      </div>
+      <div class="pad-row">
+        <button class="pad">4</button><button class="pad">5</button><button class="pad">6</button>
+      </div>
+      <div class="pad-row">
+        <button class="pad">7</button><button class="pad">8</button><button class="pad">9</button>
+      </div>
+      <div class="pad-row">
+        <button id="clear-cell" class="pad pad-clear">Clear</button>
+      </div>
+    </section>
+
+    <div id="buffer" class="buffer-bar" aria-hidden="true" style="display:none"></div>
+
+    <footer class="footer">Accessible • Voice-first • Neon UI</footer>
+  </main>
+
+  <script type="module" src="main.js"></script>
+
+  <!-- keep your existing animated-bg script if you use it; keep ordering -->
+  <script src="animated-bg/final.js" defer></script>
+
+  <!-- combined butterflies + fireflies -->
+  <script src="animated-bg/combined-bg.js" defer></script>
+
+  <script src="animated-bg/ULTIMATE-bg.js" defer></script>
+
+  <script src="animated-bg/ULTIMATE-GOD-BG.js" defer></script>
+
+
+
+  <script src="voice-confirm.js" defer></script>
+</body>
+</html>

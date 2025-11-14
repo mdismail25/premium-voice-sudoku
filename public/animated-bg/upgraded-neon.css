@@ -1,0 +1,92 @@
+
+/* animated-bg/upgraded-neon.css
+   More realistic garden feel with layered blurred plants, soft bokeh and neon butterflies.
+   Uses CSS for parallax plants and canvas for animated neon butterflies with glow.
+*/
+:root{
+  --neon-a: rgba(98, 0, 255, 0.9);
+  --neon-b: rgba(0, 200, 255, 0.85);
+  --neon-c: rgba(255, 60, 180, 0.9);
+  --bg-sky: linear-gradient(180deg, rgba(10,18,30,0.55) 0%, rgba(8,12,20,0.35) 100%);
+}
+
+#animated-bg-container{
+  position:fixed;
+  inset:0;
+  width:100%;
+  height:100%;
+  pointer-events:none;
+  z-index:-9999;
+  overflow:hidden;
+  background: var(--bg-sky);
+  backdrop-filter: blur(0px);
+}
+
+/* canvas sits on top for butterflies */
+#animated-bg-canvas{
+  position:absolute;
+  left:0; top:0;
+  width:100%; height:100%;
+  z-index:3;
+  mix-blend-mode:screen;
+  will-change: transform, opacity;
+}
+
+/* soft bokeh lights */
+.animated-bg-bokeh{
+  position:absolute;
+  inset:0;
+  z-index:1;
+  pointer-events:none;
+  background-image:
+    radial-gradient(circle at 10% 20%, rgba(255,255,255,0.06) 0px, transparent 120px),
+    radial-gradient(circle at 80% 30%, rgba(200,120,255,0.05) 0px, transparent 180px),
+    radial-gradient(circle at 30% 70%, rgba(0,200,255,0.04) 0px, transparent 140px),
+    radial-gradient(circle at 85% 80%, rgba(255,60,180,0.03) 0px, transparent 220px);
+  filter: blur(14px) saturate(1.1);
+  opacity:0.95;
+}
+
+/* layered plants for parallax depth */
+.animated-bg-layer{
+  position:absolute; left:50%; transform:translateX(-50%);
+  bottom:0; width:160%; height:55%;
+  pointer-events:none; z-index:0; will-change: transform, opacity;
+  transform-origin:center bottom;
+}
+.layer-far{
+  background-image: url("data:image/svg+xml;utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1600 400'%3E%3Cdefs%3E%3ClinearGradient id='g1' x1='0' x2='0' y1='0' y2='1'%3E%3Cstop offset='0' stop-color='%23334d2c'/%3E%3Cstop offset='1' stop-color='%232a3b22'/%3E%3C/linearGradient%3E%3C/defs%3E%3Cpath d='M0 300 C120 250 260 270 380 300 C500 330 620 300 740 310 C860 320 980 300 1100 310 C1220 320 1340 300 1460 310 L1600 400 L0 400 Z' fill='url(%23g1)'/%3E%3C/svg%3E");
+  background-repeat: repeat-x; background-size:contain;
+  opacity:0.65; transform:translateY(6%); filter: blur(0.6px) saturate(0.85);
+  animation: moveFar 55s linear infinite;
+}
+.layer-mid{
+  height:70%;
+  background-image: url("data:image/svg+xml;utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1600 400'%3E%3Cdefs%3E%3ClinearGradient id='g2' x1='0' x2='0' y1='0' y2='1'%3E%3Cstop offset='0' stop-color='%23407d46'/%3E%3Cstop offset='1' stop-color='%232b5b2f'/%3E%3C/linearGradient%3E%3C/defs%3E%3Cpath d='M0 240 C100 200 200 230 300 210 C400 190 520 230 640 210 C760 190 880 230 1000 210 C1120 190 1240 230 1360 210 C1480 190 1600 230 L1600 400 L0 400 Z' fill='url(%23g2)'/%3E%3C/svg%3E");
+  background-repeat: repeat-x; background-size:contain;
+  opacity:0.9; transform:translateY(2%); filter: blur(0.8px);
+  animation: moveMid 32s linear infinite;
+}
+.layer-near{
+  height:90%;
+  background-image: url("data:image/svg+xml;utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1600 500'%3E%3Cdefs%3E%3ClinearGradient id='g3' x1='0' x2='0' y1='0' y2='1'%3E%3Cstop offset='0' stop-color='%234b9450'/%3E%3Cstop offset='1' stop-color='%233c6f3b'/%3E%3C/linearGradient%3E%3C/defs%3E%3Cpath d='M0 260 C80 220 160 260 240 240 C320 220 400 260 480 240 C560 220 640 260 720 240 C800 220 880 260 960 240 C1040 220 1120 260 1200 240 C1280 220 1360 260 1600 240 L1600 500 L0 500 Z' fill='url(%23g3)'/%3E%3C/svg%3E");
+  background-repeat: repeat-x; background-size:contain;
+  opacity:1; filter: drop-shadow(0 8px 10px rgba(0,0,0,0.28));
+  animation: moveNear 18s linear infinite;
+}
+
+/* gentle sway to mimic wind */
+@keyframes moveFar{ from{ transform:translateX(0) } to{ transform:translateX(-30%) } }
+@keyframes moveMid{ from{ transform:translateX(0) } to{ transform:translateX(-45%) } }
+@keyframes moveNear{ from{ transform:translateX(0) } to{ transform:translateX(-60%) } }
+
+/* subtle vignette */
+.animated-bg-vignette{
+  position:absolute; inset:0; z-index:4; pointer-events:none;
+  background: radial-gradient(60% 50% at 50% 40%, rgba(0,0,0,0) 0%, rgba(0,0,0,0.25) 100%);
+  mix-blend-mode:multiply; opacity:0.9;
+}
+
+/* small control for reducing visual intensity (for accessibility) */
+body.reduce-neon #animated-bg-canvas{ opacity:0.5; }
+body.reduce-neon .animated-bg-bokeh{ opacity:0.5; }
