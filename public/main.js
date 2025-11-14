@@ -13,7 +13,7 @@ window.addEventListener('DOMContentLoaded', () => {
   });
 
   // solver worker
-  const solver = new Worker('solver.worker.js');
+  const solver = new Worker('./solver.worker.js');
   const loading = document.getElementById('loading');
 
   document.getElementById('solve').addEventListener('click', () => {
