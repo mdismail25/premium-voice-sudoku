@@ -9,50 +9,178 @@ window.addEventListener('DOMContentLoaded', () => {
   // controls
   document.getElementById('new-game').addEventListener('click', () => {
     generatePuzzle();
-    document.getElementById('message').textContent = 'New puzzle generated';
+    const msg = document.getElementById('message');
+    if (msg) msg.textContent = 'New puzzle generated';
   });
 
   // solver worker
   const solver = new Worker('./solver.worker.js');
+  // expose for debugging / optional external use
+  window._solverWorker = solver;
+
   const loading = document.getElementById('loading');
+  // your HTML used id="buffer" previously — we support both
+  const bufferBar = document.getElementById('buffer');
 
-  document.getElementById('solve').addEventListener('click', () => {
-    const grid = getGridValues();
-    loading.hidden = false;
-    solver.postMessage({ type: 'solve', grid });
-  });
+  function showBuffer(text = 'Solving…') {
+    try {
+      if (bufferBar) {
+        bufferBar.style.display = '';
+        bufferBar.textContent = text;
+        bufferBar.setAttribute('aria-hidden', 'false');
+      }
+      if (loading) loading.hidden = false;
+    } catch (e) { console.warn('showBuffer', e); }
+  }
+  function hideBuffer() {
+    try {
+      if (bufferBar) {
+        bufferBar.style.display = 'none';
+        bufferBar.setAttribute('aria-hidden', 'true');
+      }
+      if (loading) loading.hidden = true;
+    } catch (e) { console.warn('hideBuffer', e); }
+  }
 
+  // Expose solve helper so buttons/voice can call it consistently
+  window.solvePuzzle = function () {
+    try {
+      const grid = getGridValues();
+      showBuffer('Solving…');
+      solver.postMessage({ type: 'solve', grid });
+    } catch (err) {
+      hideBuffer();
+      console.error('solvePuzzle error', err);
+    }
+  };
+
+  // Request a single-cell hint: solve in worker then apply ONE cell
+  window.requestHint = function requestHint() {
+    try {
+      const grid = getGridValues();
+      showBuffer('Computing hint…');
+
+      return new Promise((resolve, reject) => {
+        const handler = function (e) {
+          const data = e.data;
+          if (!data) return;
+
+          if (data.type === 'solved' || data.type === 'hint-solved') {
+            const solved = data.grid;
+            let applied = false;
+
+            // find first empty cell in current grid and set it
+            for (let r = 0; r < 9 && !applied; r++) {
+              for (let c = 0; c < 9 && !applied; c++) {
+                const cur = grid[r][c];
+                if (!cur || cur === 0) {
+                  const newVals = JSON.parse(JSON.stringify(grid));
+                  newVals[r][c] = solved[r][c];
+                  // markPrefilled = false (so hint isn't locked as a given)
+                  setGridValues(newVals, false);
+                  const msgEl = document.getElementById('message');
+                  if (msgEl) msgEl.textContent = `Hint placed at r${r+1} c${c+1}`;
+                  applied = true;
+                }
+              }
+            }
+
+            if (!applied) {
+              const msgEl = document.getElementById('message');
+              if (msgEl) msgEl.textContent = 'No hints available';
+            }
+
+            hideBuffer();
+            solver.removeEventListener('message', handler);
+            resolve(applied);
+            return;
+          }
+
+          if (data.type === 'no-solution' || data.type === 'error') {
+            hideBuffer();
+            solver.removeEventListener('message', handler);
+            reject(new Error('No solution'));
+            return;
+          }
+        };
+
+        // listen once for this hint response
+        solver.addEventListener('message', handler);
+
+        // ask the worker to solve the grid copy
+        solver.postMessage({ type: 'solve', grid });
+      });
+    } catch (err) {
+      hideBuffer();
+      return Promise.reject(err);
+    }
+  };
+
+  // wire Solve button to helper (keeps original behaviour but uses our helper)
+  const solveBtn = document.getElementById('solve');
+  if (solveBtn) {
+    solveBtn.addEventListener('click', () => {
+      window.solvePuzzle();
+    });
+  }
+
+  // wire Hint button (your HTML uses id="hintBtn")
+  const hintBtn = document.getElementById('hintBtn') || document.getElementById('hint') || document.getElementById('ai-hint');
+  if (hintBtn) {
+    hintBtn.addEventListener('click', () => {
+      if (typeof window.requestHint === 'function') {
+        window.requestHint().catch(() => {
+          const msg = document.getElementById('message');
+          if (msg) { msg.textContent = 'Hint failed'; setTimeout(()=> msg.textContent = '', 2000); }
+        });
+      } else {
+        const msg = document.getElementById('message');
+        if (msg) { msg.textContent = 'No hint available'; setTimeout(()=> msg.textContent = '', 2000); }
+      }
+    });
+  }
+
+  // solver message handler (keeps original behaviour but also controls buffer)
   solver.onmessage = (e) => {
-    loading.hidden = true;
+    try { hideBuffer(); } catch (e) {}
     const data = e.data;
-    if (data.type === 'solved') {
+    if (data && data.type === 'solved') {
       setGridValues(data.grid, false);
-      document.getElementById('message').textContent = 'Solved by worker';
-    } else {
-      document.getElementById('message').textContent = 'No solution';
+      const m = document.getElementById('message');
+      if (m) m.textContent = 'Solved by worker';
+    } else if (data && (data.type === 'no-solution' || data.type === 'error')) {
+      const m = document.getElementById('message');
+      if (m) m.textContent = 'No solution';
     }
   };
 
   // ---------------------------
   // 🎙️ VOICE BUTTON (UPDATED)
   // ---------------------------
-  document.getElementById('listen').addEventListener('click', () => {
-    toggleVoice(); // your existing voice toggle
+  const listenBtn = document.getElementById('listen');
+  if (listenBtn) {
+    listenBtn.addEventListener('click', () => {
+      toggleVoice(); // your existing voice toggle
 
-    // NEW → background mic toggle
-    if (window.__ULTIMATE_BG_TOGGLE_MIC) {
-      window.__ULTIMATE_BG_TOGGLE_MIC();
-    }
+      // optional background mic toggle (if defined by other script)
+      if (window.__ULTIMATE_BG_TOGGLE_MIC) {
+        window.__ULTIMATE_BG_TOGGLE_MIC();
+      }
 
-    // update button UI
-    const btn = document.getElementById('listen');
-    const pressed = btn.getAttribute('aria-pressed') === 'true';
-    btn.setAttribute('aria-pressed', String(!pressed));
-  });
+      // update button UI
+      const btn = document.getElementById('listen');
+      const pressed = btn.getAttribute('aria-pressed') === 'true';
+      btn.setAttribute('aria-pressed', String(!pressed));
+    });
+  }
 
-  document.getElementById('stop-voice').addEventListener('click', () => {
-    document.getElementById('listen').setAttribute('aria-pressed', 'false');
-  });
+  const stopVoiceBtn = document.getElementById('stop-voice');
+  if (stopVoiceBtn) {
+    stopVoiceBtn.addEventListener('click', () => {
+      const b = document.getElementById('listen');
+      if (b) b.setAttribute('aria-pressed', 'false');
+    });
+  }
 
   // ---------------------------
   // Number pad
@@ -84,38 +212,40 @@ window.addEventListener('DOMContentLoaded', () => {
 // Neon Background Animation
 // ---------------------------
 const c = document.getElementById('neonCanvas');
-const ctx = c.getContext('2d');
+if (c) {
+  const ctx = c.getContext('2d');
 
-function resize() {
-  c.width = innerWidth;
-  c.height = innerHeight;
+  function resize() {
+    c.width = innerWidth;
+    c.height = innerHeight;
+  }
+  resize();
+  addEventListener('resize', resize);
+
+  let particles = [...Array(80)].map(() => ({
+    x: Math.random() * c.width,
+    y: Math.random() * c.height,
+    vx: (Math.random() - 0.5) * 0.6,
+    vy: (Math.random() - 0.5) * 0.6,
+    r: 2 + Math.random() * 3
+  }));
+
+  function neon() {
+    ctx.clearRect(0, 0, c.width, c.height);
+    particles.forEach((p) => {
+      p.x += p.vx;
+      p.y += p.vy;
+      if (p.x < 0 || p.x > c.width) p.vx *= -1;
+      if (p.y < 0 || p.y > c.height) p.vy *= -1;
+
+      ctx.beginPath();
+      ctx.fillStyle = 'rgba(0,255,255,0.7)';
+      ctx.shadowColor = '#0ff';
+      ctx.shadowBlur = 15;
+      ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+      ctx.fill();
+    });
+    requestAnimationFrame(neon);
+  }
+  neon();
 }
-resize();
-addEventListener('resize', resize);
-
-let particles = [...Array(80)].map(() => ({
-  x: Math.random() * c.width,
-  y: Math.random() * c.height,
-  vx: (Math.random() - 0.5) * 0.6,
-  vy: (Math.random() - 0.5) * 0.6,
-  r: 2 + Math.random() * 3
-}));
-
-function neon() {
-  ctx.clearRect(0, 0, c.width, c.height);
-  particles.forEach((p) => {
-    p.x += p.vx;
-    p.y += p.vy;
-    if (p.x < 0 || p.x > c.width) p.vx *= -1;
-    if (p.y < 0 || p.y > c.height) p.vy *= -1;
-
-    ctx.beginPath();
-    ctx.fillStyle = 'rgba(0,255,255,0.7)';
-    ctx.shadowColor = '#0ff';
-    ctx.shadowBlur = 15;
-    ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
-    ctx.fill();
-  });
-  requestAnimationFrame(neon);
-}
-neon();

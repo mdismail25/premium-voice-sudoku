@@ -5,12 +5,20 @@ self.onmessage = function (e) {
     postMessage({ type: 'no-solution' });
     return;
   }
+
   const grid = msg.grid.map(r => r.slice());
 
   function isSafe(g, r, c, n) {
-    for (let i = 0; i < 9; i++) if (g[r][i] === n || g[i][c] === n) return false;
-    const sr = Math.floor(r / 3) * 3, sc = Math.floor(c / 3) * 3;
-    for (let i = sr; i < sr + 3; i++) for (let j = sc; j < sc + 3; j++) if (g[i][j] === n) return false;
+    for (let i = 0; i < 9; i++) {
+      if (g[r][i] === n || g[i][c] === n) return false;
+    }
+    const sr = Math.floor(r / 3) * 3;
+    const sc = Math.floor(c / 3) * 3;
+    for (let i = sr; i < sr + 3; i++) {
+      for (let j = sc; j < sc + 3; j++) {
+        if (g[i][j] === n) return false;
+      }
+    }
     return true;
   }
 
@@ -33,6 +41,7 @@ self.onmessage = function (e) {
   }
 
   const ok = solve(grid);
+
   if (!ok) {
     if (msg.type === 'solve') postMessage({ type: 'no-solution' });
     else if (msg.type === 'hint') postMessage({ type: 'hint-no-solution' });

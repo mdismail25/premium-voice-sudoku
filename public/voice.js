@@ -1,184 +1,327 @@
-// voice.js — deterministic single-worker strategy: stop-on-final, process one transcript, restart after done.
-// Replaces previous voice.js to stabilize repeated commands bursts.
-import { insert, selectCell, clear, generatePuzzle, speak as ttsSpeak, announce, selected } from './sudoku.js';
+// voice.js — deterministic stable voice engine with restart-safety.
+// Fully integrated with main.js + sudoku.js + solver.worker.js.
+
+import {
+  insert,
+  selectCell,
+  clear,
+  generatePuzzle,
+  speak as ttsSpeak,
+  announce,
+  selected
+} from "./sudoku.js";
 
 let recognition = null;
 let listening = false;
 let processing = false;
 let userRequestedOn = false;
-let lastTranscript = '';
+let lastTranscript = "";
 let lastTranscriptAt = 0;
 
 const DEBOUNCE_MS = 1200;
 const DUPLICATE_WINDOW_MS = 2500;
 const RESTART_DELAY_MS = 400;
-const NUMBER_WORDS = {'one':1,'two':2,'three':3,'four':4,'five':5,'six':6,'seven':7,'eight':8,'nine':9};
 
-function similarEnough(a,b){
-  if(!a||!b) return false;
-  if(a === b) return true;
-  if(a.includes(b) || b.includes(a)) return true;
-  if(Math.abs(a.length - b.length) <= 2){
+const NUMBER_WORDS = {
+  one: 1,
+  two: 2,
+  three: 3,
+  four: 4,
+  five: 5,
+  six: 6,
+  seven: 7,
+  eight: 8,
+  nine: 9,
+};
+
+function similarEnough(a, b) {
+  if (!a || !b) return false;
+  if (a === b) return true;
+  if (a.includes(b) || b.includes(a)) return true;
+
+  if (Math.abs(a.length - b.length) <= 2) {
     let diff = 0;
     const L = Math.min(a.length, b.length);
-    for(let i=0;i<L;i++) if(a[i]!==b[i]) diff++;
+    for (let i = 0; i < L; i++) if (a[i] !== b[i]) diff++;
     diff += Math.abs(a.length - b.length);
     return diff <= 2;
   }
   return false;
 }
 
-function parseNumberFromText(text) {
-  const numMatch = text.match(/\b([1-9])\b/);
-  if (numMatch) return parseInt(numMatch[1],10);
-  for (const [w,n] of Object.entries(NUMBER_WORDS)) if (text.includes(w)) return n;
+export function parseNumberFromText(text) {
+  const direct = text.match(/\b([1-9])\b/);
+  if (direct) return parseInt(direct[1], 10);
+
+  for (const [w, n] of Object.entries(NUMBER_WORDS)) {
+    if (text.includes(w)) return n;
+  }
   return null;
 }
 
-export function initVoice(){
+export function initVoice() {
   if (recognition) return;
-  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-  if (!SpeechRecognition){
-    const el = document.getElementById('voice-status');
-    if (el) el.textContent = 'SpeechRecognition not supported';
+
+  const SpeechRecognition =
+    window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SpeechRecognition) {
+    const vs = document.getElementById("voice-status");
+    if (vs) vs.textContent = "SpeechRecognition not supported";
     return;
   }
+
   recognition = new SpeechRecognition();
   recognition.continuous = true;
   recognition.interimResults = true;
-  recognition.lang = 'en-US';
+  recognition.lang = "en-US";
   recognition.maxAlternatives = 1;
 
   recognition.onstart = () => {
     listening = true;
-    const btn = document.getElementById('listen');
-    if (btn) btn.setAttribute('aria-pressed','true');
-    const vs = document.getElementById('voice-status');
-    if (vs) vs.textContent = '🎙️ Listening...';
-    console.log('[voice] onstart');
+    document
+      .getElementById("listen")
+      ?.setAttribute("aria-pressed", "true");
+    const vs = document.getElementById("voice-status");
+    if (vs) vs.textContent = "🎙️ Listening...";
   };
 
   recognition.onend = () => {
     listening = false;
-    const btn = document.getElementById('listen');
-    if (btn) btn.setAttribute('aria-pressed','false');
-    const vs = document.getElementById('voice-status');
-    if (vs) vs.textContent = userRequestedOn ? 'Click to resume' : 'Not listening';
-    console.log('[voice] onend; userRequestedOn=', userRequestedOn, 'processing=', processing);
-    if(userRequestedOn && !processing){
+    document
+      .getElementById("listen")
+      ?.setAttribute("aria-pressed", "false");
+
+    const vs = document.getElementById("voice-status");
+    if (vs) vs.textContent = userRequestedOn
+      ? "Click to resume"
+      : "Not listening";
+
+    if (userRequestedOn && !processing) {
       setTimeout(() => {
-        try { recognition.start(); console.log('[voice] restarted after end'); }
-        catch(e){ console.warn('[voice] restart failed', e); }
+        try {
+          recognition.start();
+        } catch (e) {
+          console.warn("[voice] restart failed", e);
+        }
       }, 300);
     }
   };
 
   recognition.onerror = (e) => {
-    console.error('[voice] error', e);
-    const vs = document.getElementById('voice-status');
-    if (vs) vs.textContent = 'Voice error';
+    console.error("[voice] error", e);
+    const vs = document.getElementById("voice-status");
+    if (vs) vs.textContent = "Voice error";
   };
 
   recognition.onresult = async (evt) => {
-    let interim = '', final = '';
-    for (let i = evt.resultIndex; i < evt.results.length; ++i){
+    let interim = "",
+      final = "";
+
+    for (let i = evt.resultIndex; i < evt.results.length; i++) {
       const r = evt.results[i];
-      if (r.isFinal) final += r[0].transcript + ' ';
-      else interim += r[0].transcript + ' ';
+      if (r.isFinal) final += r[0].transcript + " ";
+      else interim += r[0].transcript + " ";
     }
+
     interim = interim.trim();
     final = final.trim();
 
-    if(interim){
-      const vs = document.getElementById('voice-status');
-      if(vs) vs.textContent = '📝 ' + interim;
+    if (interim) {
+      const vs = document.getElementById("voice-status");
+      if (vs) vs.textContent = "📝 " + interim;
     }
 
-    if(final){
-      const transcript = final.toLowerCase().trim();
-      if(!transcript) return;
-      console.log('[voice] final received:', transcript);
+    if (!final) return;
 
-      if(processing){
-        console.log('[voice] dropped because processing active:', transcript);
-        return;
-      }
+    const transcript = final.toLowerCase().trim();
+    if (!transcript) return;
 
-      const now = Date.now();
-      if(similarEnough(transcript, lastTranscript) && (now - lastTranscriptAt) < DUPLICATE_WINDOW_MS){
-        console.log('[voice] suppressed similar duplicate transcript:', transcript);
-        return;
-      }
+    console.log("[voice] final:", transcript);
 
-      const words = transcript.split(/\s+/).filter(Boolean);
-      const isSingleNumber = (/^\d$/.test(transcript) || Object.keys(NUMBER_WORDS).includes(transcript));
-      const knownShort = ['up','down','left','right','clear','delete','remove','solve','reset','new','start'];
-      const isKnownShort = words.length === 1 && knownShort.includes(transcript);
+    if (processing) return;
 
-      if(words.length === 1 && !isSingleNumber && !isKnownShort){
-        console.log('[voice] ignored 1-word non-command final:', transcript);
-        const evtConfirm = new CustomEvent('voice:ambiguous', { detail: { transcript } });
-        window.dispatchEvent(evtConfirm);
-        return;
-      }
+    const now = Date.now();
 
-      processing = true;
-      try { recognition.stop(); } catch(e){ console.warn('[voice] stop failed', e); }
+    if (
+      similarEnough(transcript, lastTranscript) &&
+      now - lastTranscriptAt < DUPLICATE_WINDOW_MS
+    ) {
+      console.log("[voice] duplicate suppressed:", transcript);
+      return;
+    }
 
-      announce(`Heard: ${transcript}`);
-      lastTranscript = transcript;
-      lastTranscriptAt = now;
+    const words = transcript.split(/\s+/).filter(Boolean);
+    const isSingleNum =
+      /^\d$/.test(transcript) ||
+      Object.keys(NUMBER_WORDS).includes(transcript);
+    const knownShort = [
+      "up",
+      "down",
+      "left",
+      "right",
+      "clear",
+      "delete",
+      "remove",
+      "solve",
+      "reset",
+      "new",
+      "start",
+      "hint",
+    ];
+    const isShortCmd =
+      words.length === 1 && knownShort.includes(transcript);
 
-      await handleFinalTranscript(transcript);
+    if (words.length === 1 && !isSingleNum && !isShortCmd) {
+      window.dispatchEvent(
+        new CustomEvent("voice:ambiguous", {
+          detail: { transcript },
+        })
+      );
+      return;
+    }
 
-      processing = false;
-      setTimeout(() => {
-        if(userRequestedOn){
-          try { recognition.start(); console.log('[voice] restart after processing'); }
-          catch(e){ console.warn('[voice] restart after processing failed', e); }
+    processing = true;
+    try {
+      recognition.stop();
+    } catch {}
+
+    announce(`Heard: ${transcript}`);
+    lastTranscript = transcript;
+    lastTranscriptAt = now;
+
+    await handleCommand(transcript);
+
+    processing = false;
+
+    setTimeout(() => {
+      if (userRequestedOn) {
+        try {
+          recognition.start();
+        } catch (e) {
+          console.warn("[voice] restart error:", e);
         }
-      }, RESTART_DELAY_MS);
-    }
+      }
+    }, RESTART_DELAY_MS);
   };
 }
 
-export function toggleVoice(){
-  if(!recognition) initVoice();
-  const btn = document.getElementById('listen');
-  if(!recognition || !btn) return;
-  if(listening){
+export function toggleVoice() {
+  if (!recognition) initVoice();
+
+  if (listening) {
     userRequestedOn = false;
-    try { recognition.stop(); } catch(e){ console.warn('[voice] toggle stop failed', e); }
-    console.log('[voice] user toggled OFF');
+    try {
+      recognition.stop();
+    } catch {}
+    return false;
   } else {
     userRequestedOn = true;
-    try { recognition.start(); } catch(e){ console.warn('[voice] toggle start failed', e); }
-    console.log('[voice] user toggled ON');
+    try {
+      recognition.start();
+    } catch {}
+    return true;
   }
 }
 
-async function handleFinalTranscript(transcript){
+async function handleCommand(text) {
   const now = Date.now();
-  if(handleFinalTranscript._lastHandledAt && (now - handleFinalTranscript._lastHandledAt) < DEBOUNCE_MS){
-    console.log('[voice] global debounce prevented action:', transcript);
-    handleFinalTranscript._lastHandledAt = now;
+
+  if (
+    handleCommand._last &&
+    now - handleCommand._last < DEBOUNCE_MS
+  ) {
+    handleCommand._last = now;
     return;
   }
-  handleFinalTranscript._lastHandledAt = now;
+  handleCommand._last = now;
 
   try {
-    if(transcript.includes('up')){ const {row,col}=selected; selectCell(Math.max(0,row-1),col); ttsSpeak('Moved up'); return; }
-    if(transcript.includes('down')){ const {row,col}=selected; selectCell(Math.min(8,row+1),col); ttsSpeak('Moved down'); return; }
-    if(transcript.includes('left')){ const {row,col}=selected; selectCell(row,Math.max(0,col-1)); ttsSpeak('Moved left'); return; }
-    if(transcript.includes('right')){ const {row,col}=selected; selectCell(row,Math.min(8,col+1)); ttsSpeak('Moved right'); return; }
-    if(transcript.includes('clear')||transcript.includes('delete')||transcript.includes('remove')){ clear(); ttsSpeak('Cleared cell'); return; }
-    if(transcript.includes('new game')||transcript.includes('new puzzle')||transcript.includes('reset')){ generatePuzzle(); ttsSpeak('New puzzle generated'); return; }
-    if(transcript.includes('solve')){ const solveBtn = document.getElementById('solve'); if(solveBtn) solveBtn.click(); ttsSpeak('Solving puzzle'); return; }
-    const n = parseNumberFromText(transcript); if(n !== null){ insert(n); return; }
-    announce(`Unrecognized: ${transcript}`); ttsSpeak('Command not recognized');
-  } catch(e){
-    console.error('[voice] handling transcript failed', e);
+    // MOVEMENT
+    if (text.includes("up")) {
+      const { row, col } = selected;
+      selectCell(Math.max(0, row - 1), col);
+      ttsSpeak("Moved up");
+      return;
+    }
+
+    if (text.includes("down")) {
+      const { row, col } = selected;
+      selectCell(Math.min(8, row + 1), col);
+      ttsSpeak("Moved down");
+      return;
+    }
+
+    if (text.includes("left")) {
+      const { row, col } = selected;
+      selectCell(row, Math.max(0, col - 1));
+      ttsSpeak("Moved left");
+      return;
+    }
+
+    if (text.includes("right")) {
+      const { row, col } = selected;
+      selectCell(row, Math.min(8, col + 1));
+      ttsSpeak("Moved right");
+      return;
+    }
+
+    // CLEAR
+    if (
+      text.includes("clear") ||
+      text.includes("remove") ||
+      text.includes("delete")
+    ) {
+      clear();
+      ttsSpeak("Cleared");
+      return;
+    }
+
+    // NEW GAME
+    if (
+      text.includes("reset") ||
+      text.includes("new game") ||
+      text.includes("new puzzle") ||
+      text.includes("start")
+    ) {
+      generatePuzzle();
+      ttsSpeak("New puzzle generated");
+      return;
+    }
+
+    // SOLVE
+    if (text.includes("solve")) {
+      // prefer calling helper directly if present
+      if (typeof window.solvePuzzle === 'function') {
+        window.solvePuzzle();
+      } else {
+        document.getElementById("solve")?.click();
+      }
+      ttsSpeak("Solving puzzle");
+      return;
+    }
+
+    // HINT
+    if (text.includes("hint")) {
+      if (typeof window.requestHint === 'function') {
+        window.requestHint();
+      } else {
+        document.getElementById("hintBtn")?.click();
+      }
+      ttsSpeak("Hint");
+      return;
+    }
+
+    // NUMBER INPUT
+    const n = parseNumberFromText(text);
+    if (n !== null) {
+      insert(n);
+      return;
+    }
+
+    // UNRECOGNIZED
+    announce("Unrecognized: " + text);
+    ttsSpeak("Command not recognized");
+  } catch (e) {
+    console.error("[voice] command error:", e);
   }
 }
-
-export { parseNumberFromText };
