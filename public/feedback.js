@@ -1,5 +1,5 @@
-// feedback.js - updated for no-email flow
-// - Form handling (POST to /feedback or fallback to localStorage queue)
+// feedback.js - updated to use Formspree endpoint (no-email flow)
+// - Form handling (POST to Formspree or fallback to localStorage queue)
 // - Voice commands with continuous listening toggle
 // - Combined voice parsing: "enter name john and message I love your app"
 // - TTS confirmations and UI status updates
@@ -17,7 +17,7 @@ const DOM = {
 
 function speak(text) {
   try {
-    if (!window.speechSynthesis) return;
+    if (!window.speechSynthesis || !text) return;
     const u = new SpeechSynthesisUtterance(text);
     u.lang = 'en-US';
     window.speechSynthesis.cancel();
@@ -82,6 +82,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
   if (!DOM.form) return;
 
+  // helper to get endpoint (Formspree)
+  function getEndpoint() {
+    return (DOM.form.dataset && DOM.form.dataset.endpoint) ? DOM.form.dataset.endpoint : 'https://formspree.io/f/xnnldeka';
+  }
+
   // Clear button handler (immediate UI feedback + focus)
   if (DOM.clearBtn) {
     DOM.clearBtn.addEventListener('click', () => {
@@ -93,7 +98,21 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  // Submit handler: posts to server or saves locally, then redirect back
+  // helper: save to local queue
+  function saveToLocal(payload) {
+    try {
+      const key = 'neun_feedback_queue';
+      const queue = JSON.parse(localStorage.getItem(key) || '[]');
+      queue.push(payload);
+      localStorage.setItem(key, JSON.stringify(queue));
+      return true;
+    } catch (e) {
+      console.error('saveToLocal error', e);
+      return false;
+    }
+  }
+
+  // Submit handler: posts to Formspree or saves locally, then redirect back
   DOM.form.addEventListener('submit', async (ev) => {
     ev.preventDefault();
     DOM.status.textContent = '';
@@ -116,13 +135,20 @@ document.addEventListener('DOMContentLoaded', () => {
     DOM.status.textContent = 'Sending...';
     speak('Sending feedback');
 
-    // Try server POST
+    const endpoint = getEndpoint();
+
+    // Try Formspree JSON API
     try {
-      const resp = await fetch('/feedback', {
+      const resp = await fetch(endpoint, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
+        headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+        body: JSON.stringify({ name: payload.name, message: payload.message })
       });
+
+      // Try parse JSON but guard
+      let data = null;
+      try { data = await resp.json(); } catch (e) { data = null; }
+
       if (resp.ok) {
         DOM.status.textContent = 'Thanks — your feedback was sent.';
         speak('Thanks, your feedback was sent');
@@ -131,45 +157,48 @@ document.addEventListener('DOMContentLoaded', () => {
         setTimeout(() => { window.location.href = 'index.html'; }, 900);
         return;
       } else {
-        console.warn('Feedback endpoint returned', resp.status);
+        console.warn('Formspree returned non-ok', resp.status, data);
+        // continue to fallback
       }
     } catch (e) {
-      console.warn('Feedback POST failed, saving locally', e);
+      console.warn('Formspree POST failed', e);
     }
 
     // Fallback: save locally then redirect
-    try {
-      const key = 'neun_feedback_queue';
-      const queue = JSON.parse(localStorage.getItem(key) || '[]');
-      queue.push(payload);
-      localStorage.setItem(key, JSON.stringify(queue));
+    const ok = saveToLocal(payload);
+    if (ok) {
       DOM.status.textContent = 'Saved locally (no server). Will retry when available.';
       speak('Saved locally. I will retry when the server is available');
       DOM.form.reset();
       setTimeout(() => { window.location.href = 'index.html'; }, 900);
-    } catch (e) {
+    } else {
       DOM.status.textContent = 'Failed to save feedback locally.';
-      console.error('feedback save error', e);
+      console.error('feedback save error');
       speak('Failed to save feedback locally');
     }
   });
 
-  // background retry attempt (silent)
+  // background retry attempt (silent) — posts queued items to Formspree
   (async function tryFlushQueue(){
     try {
       const key = 'neun_feedback_queue';
       const q = JSON.parse(localStorage.getItem(key) || '[]');
       if (!q.length) return;
+      const endpoint = getEndpoint();
       for (let i = 0; i < q.length; i++) {
         try {
-          const r = await fetch('/feedback', {
+          const item = q[i];
+          const resp = await fetch(endpoint, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(q[i])
+            headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+            body: JSON.stringify({ name: item.name, message: item.message })
           });
-          if (r.ok) {
+          if (resp.ok) {
             q.splice(i, 1);
             i--;
+          } else {
+            // stop trying further to avoid rate limits/errors
+            break;
           }
         } catch (er) {
           break;

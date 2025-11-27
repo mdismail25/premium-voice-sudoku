@@ -128,7 +128,7 @@
     <header class="header" style="display:flex;align-items:center;justify-content:space-between;gap:12px;">
       <div>
         <h1>🧠 Premium Voice Sudoku</h1>
-        <p class="subtitle">Feedback — name, email and message</p>
+        <p class="subtitle">Feedback — name and message</p>
       </div>
 
       <!-- Sudoku nav + small voice listen control -->
@@ -141,13 +141,26 @@
     <div class="feedback-wrap" role="region" aria-labelledby="feedback-title">
       <h2 id="feedback-title">Send feedback</h2>
 
-      <form id="feedbackForm" class="feedback-grid" novalidate>
+      <!--
+        Form is wired for Formspree:
+        - action points to your Formspree form (non-JS fallback)
+        - data-endpoint is provided so your feedback.js can use it for fetch()
+      -->
+      <form id="feedbackForm" class="feedback-grid"
+            action="https://formspree.io/f/xnnldeka"
+            method="POST"
+            data-endpoint="https://formspree.io/f/xnnldeka"
+            novalidate>
+
+        <!-- hidden values for Formspree (optional) -->
+        <input type="hidden" name="_subject" value="New Feedback — Premium Voice Sudoku">
+        <input type="hidden" name="_captcha" value="false">
+
         <div>
           <label for="fb-name">Name</label>
           <input id="fb-name" name="name" class="feedback-input" type="text" placeholder="Your name (optional)" />
         </div>
 
-        
         <div>
           <label for="fb-message">Message</label>
           <textarea id="fb-message" name="message" class="feedback-textarea" placeholder="Write your feedback..." required></textarea>
