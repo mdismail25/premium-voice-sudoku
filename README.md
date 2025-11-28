@@ -62,8 +62,8 @@ root/
    ├─ ULTIMATE-bg.js
    └─ ULTIMATE-GOD-BG.js
 
-
-# **Getting Started (Local Development)**
+```
+```Getting Started (Local Development)
 
 You can run this as a simple static site.
 
