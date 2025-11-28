@@ -7,7 +7,9 @@
 // - Difficulty level commands (easy/medium/hard) announced by voice
 // - Navigate to feedback page via voice
 // - Ignores recognition while the app itself is speaking to prevent "echo" commands
-//   (IGNORE WINDOW set to 5-6 seconds after each speak)
+//   (IGNORE WINDOW set to 5–7 seconds after each speak)
+// - NEW: "stop listening / stop listing / stop voice / mic off" commands
+// - NEW: Chrome-safe TTS: requires one user interaction (click / key) to unlock speech
 
 import {
   insert,
@@ -48,6 +50,32 @@ const NUMBER_WORDS = {
 if (!window.__VOICE_SPEAKING_UNTIL) {
   window.__VOICE_SPEAKING_UNTIL = 0;
 }
+
+// NEW: speech unlock flag (Chrome requires user gesture for audio/tts)
+let speechUnlocked = false;
+
+// One-time unlock on user interaction
+function unlockSpeechByInteraction() {
+  if (speechUnlocked) return;
+  speechUnlocked = true;
+  console.log("[TTS] Speech unlocked by user interaction");
+
+  // optional small confirmation; this is inside a user gesture so allowed
+  try {
+    if (window && window.speechSynthesis) {
+      const u = new SpeechSynthesisUtterance("Voice enabled");
+      u.lang = "en-US";
+      window.speechSynthesis.cancel();
+      window.speechSynthesis.speak(u);
+    }
+  } catch (e) {
+    console.warn("[TTS] Unlock speak failed:", e);
+  }
+}
+
+// listen for first click or keydown anywhere in the page
+window.addEventListener("click", unlockSpeechByInteraction, { once: true });
+window.addEventListener("keydown", unlockSpeechByInteraction, { once: true });
 
 // --------------------
 // Utility: similarity (duplicate suppression)
@@ -104,19 +132,51 @@ function safeSpeak(txt) {
   try {
     if (!txt) return;
 
-    // NEW: enforce a 5-6 second ignore window after each app speech
-    const now = Date.now();
-    const ms5000to6000 = 5000 + Math.floor(Math.random() * 1001); // 5000..6000 ms
-    window.__VOICE_SPEAKING_UNTIL = Math.max(window.__VOICE_SPEAKING_UNTIL || 0, now + ms5000to6000);
+    console.log("[TTS] Requested to speak:", txt);
 
-    if (typeof ttsSpeak === "function") {
-      ttsSpeak(txt);
-    } else if (window && window.speechSynthesis) {
+    // If browser hasn't seen a real user gesture yet, Chrome may block TTS.
+    if (!speechUnlocked) {
+      console.warn("[TTS] Blocked: waiting for user click or key press to unlock speech.");
+      return;
+    }
+
+    // 5–7 second ignore window after *our* speech
+    const now = Date.now();
+    const ms5000to7000 = 5000 + Math.floor(Math.random() * 2001); // 5000..7000 ms
+    window.__VOICE_SPEAKING_UNTIL = Math.max(
+      window.__VOICE_SPEAKING_UNTIL || 0,
+      now + ms5000to7000
+    );
+
+    // Prefer direct browser TTS (Chrome friendly)
+    if (window && window.speechSynthesis) {
       const u = new SpeechSynthesisUtterance(txt);
       u.lang = "en-US";
+
+      u.onstart = () => console.log("[TTS] Started speaking");
+      u.onend = () => console.log("[TTS] Finished speaking");
+      u.onerror = (e) => {
+        if (e.error === "interrupted") {
+          console.log("[TTS] Speech interrupted (another utterance took over).");
+          return;
+        }
+        console.error("[TTS] Error during speak:", e);
+      };
+
+      // Clear any queued speech to avoid overlap / ignored utterances
       window.speechSynthesis.cancel();
       window.speechSynthesis.speak(u);
+      return;
     }
+
+    // Fallback: custom ttsSpeak if provided
+    if (typeof ttsSpeak === "function") {
+      console.log("[TTS] Using custom ttsSpeak()");
+      ttsSpeak(txt);
+      return;
+    }
+
+    console.warn("[TTS] No speech engine available");
   } catch (e) {
     console.warn("TTS error", e);
   }
@@ -342,6 +402,7 @@ function setDifficulty(level) {
 
 // -------------------------------
 // Main voice recognition init & toggle
+// -------------------------------
 export function initVoice() {
   if (recognition) return;
 
@@ -355,7 +416,7 @@ export function initVoice() {
 
   recognition = new SpeechRecognition();
   recognition.continuous = true;
-  recognition.interimResults = true; // keep this; we ignore during speaking anyway
+  recognition.interimResults = true;
   recognition.lang = "en-US";
   recognition.maxAlternatives = 1;
 
@@ -375,12 +436,14 @@ export function initVoice() {
     const vs = document.getElementById("voice-status");
     if (vs) vs.textContent = userRequestedOn ? "Click to resume" : "Not listening";
 
-    if (userRequestedOn && !processing) {
+    if (userRequestedOn && !processing && !listening) {
       setTimeout(() => {
-        try {
-          recognition.start();
-        } catch (e) {
-          console.warn("[voice] restart failed", e);
+        if (!listening) { // double-check just before starting
+          try {
+            recognition.start();
+          } catch (e) {
+            console.warn("[voice] restart failed", e);
+          }
         }
       }, 300);
     }
@@ -407,7 +470,7 @@ export function initVoice() {
 
     const now = Date.now();
 
-    // 🔐 Ignore recognition while we are speaking ourselves (5-6 seconds)
+    // Ignore recognition while we are speaking (5–7 seconds)
     if (now < (window.__VOICE_SPEAKING_UNTIL || 0)) {
       console.log("[voice] Ignored transcript during self-speech:", final || interim);
       return;
@@ -456,7 +519,9 @@ export function initVoice() {
       "undo",
       "easy",
       "hard",
-      "medium"
+      "medium",
+      "stop",
+      "off"
     ];
     const isShortCmd =
       words.length === 1 && knownShort.includes(transcript);
@@ -523,6 +588,7 @@ export function toggleVoice() {
 
 // -------------------------------
 // Command handler (extended)
+// -------------------------------
 async function handleCommand(text) {
   const now = Date.now();
 
@@ -536,6 +602,25 @@ async function handleCommand(text) {
   handleCommand._last = now;
 
   try {
+    // STOP LISTENING
+    if (
+      text.includes("stop listening") ||
+      text.includes("stop listing") ||
+      text.includes("stop voice") ||
+      text.includes("mic off")
+    ) {
+      userRequestedOn = false;
+      try {
+        recognition && recognition.stop();
+      } catch {}
+      const vs = document.getElementById("voice-status");
+      if (vs) vs.textContent = "Not listening";
+      const btn = document.getElementById("listen");
+      if (btn) btn.setAttribute("aria-pressed", "false");
+      safeSpeak("Stopped listening");
+      return;
+    }
+
     // MOVEMENT
     if (text.includes("up")) {
       const pos = getSelectedPos();
@@ -570,7 +655,7 @@ async function handleCommand(text) {
     if (text.includes("right")) {
       const pos = getSelectedPos();
       const { row, col } = pos || { row: 0, col: 0 };
-      selectCell(row, Math.min(8, col + 1));
+      selectCell(row, Math.min(8, col + 1), col);
       safeSpeak("Moved right");
       const p = getSelectedPos();
       if (p) speakCellInfo(p.row, p.col);

@@ -1,9 +1,11 @@
-// feedback.js - updated to use Formspree endpoint (no-email flow)
-// - Form handling (POST to Formspree or fallback to localStorage queue)
+// feedback.js - voice-enabled feedback page (no email)
+// - Form handling (POST to /feedback or fallback to localStorage queue)
 // - Voice commands with continuous listening toggle
 // - Combined voice parsing: "enter name john and message I love your app"
 // - TTS confirmations and UI status updates
 // - Redirects back to index.html after successful send or local save
+// - NEW: auto-on mic like Sudoku page, continuous listening,
+//        and "stop listening / stop listing / stop voice / mic off" command
 
 const DOM = {
   form: null,
@@ -15,9 +17,18 @@ const DOM = {
   listenBtn: null
 };
 
+// small ignore window so recognition doesn't hear itself on this page
+if (!window.__FB_SPEAKING_UNTIL) {
+  window.__FB_SPEAKING_UNTIL = 0;
+}
+
 function speak(text) {
   try {
     if (!window.speechSynthesis || !text) return;
+    const now = Date.now();
+    const ms = 2500 + Math.floor(Math.random() * 800); // ~2.5–3.3 seconds
+    window.__FB_SPEAKING_UNTIL = Math.max(window.__FB_SPEAKING_UNTIL || 0, now + ms);
+
     const u = new SpeechSynthesisUtterance(text);
     u.lang = 'en-US';
     window.speechSynthesis.cancel();
@@ -82,12 +93,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   if (!DOM.form) return;
 
-  // helper to get endpoint (Formspree)
-  function getEndpoint() {
-    return (DOM.form.dataset && DOM.form.dataset.endpoint) ? DOM.form.dataset.endpoint : 'https://formspree.io/f/xnnldeka';
-  }
-
-  // Clear button handler (immediate UI feedback + focus)
+  // Clear button handler
   if (DOM.clearBtn) {
     DOM.clearBtn.addEventListener('click', () => {
       DOM.form.reset();
@@ -98,21 +104,7 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  // helper: save to local queue
-  function saveToLocal(payload) {
-    try {
-      const key = 'neun_feedback_queue';
-      const queue = JSON.parse(localStorage.getItem(key) || '[]');
-      queue.push(payload);
-      localStorage.setItem(key, JSON.stringify(queue));
-      return true;
-    } catch (e) {
-      console.error('saveToLocal error', e);
-      return false;
-    }
-  }
-
-  // Submit handler: posts to Formspree or saves locally, then redirect back
+  // Submit handler: posts to server or saves locally, then redirect back
   DOM.form.addEventListener('submit', async (ev) => {
     ev.preventDefault();
     DOM.status.textContent = '';
@@ -135,70 +127,59 @@ document.addEventListener('DOMContentLoaded', () => {
     DOM.status.textContent = 'Sending...';
     speak('Sending feedback');
 
-    const endpoint = getEndpoint();
-
-    // Try Formspree JSON API
+    // Try server POST
     try {
-      const resp = await fetch(endpoint, {
+      const resp = await fetch('/feedback', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
-        body: JSON.stringify({ name: payload.name, message: payload.message })
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
       });
-
-      // Try parse JSON but guard
-      let data = null;
-      try { data = await resp.json(); } catch (e) { data = null; }
-
       if (resp.ok) {
         DOM.status.textContent = 'Thanks — your feedback was sent.';
         speak('Thanks, your feedback was sent');
         DOM.form.reset();
-        // redirect after a short delay
         setTimeout(() => { window.location.href = 'index.html'; }, 900);
         return;
       } else {
-        console.warn('Formspree returned non-ok', resp.status, data);
-        // continue to fallback
+        console.warn('Feedback endpoint returned', resp.status);
       }
     } catch (e) {
-      console.warn('Formspree POST failed', e);
+      console.warn('Feedback POST failed, saving locally', e);
     }
 
     // Fallback: save locally then redirect
-    const ok = saveToLocal(payload);
-    if (ok) {
+    try {
+      const key = 'neun_feedback_queue';
+      const queue = JSON.parse(localStorage.getItem(key) || '[]');
+      queue.push(payload);
+      localStorage.setItem(key, JSON.stringify(queue));
       DOM.status.textContent = 'Saved locally (no server). Will retry when available.';
       speak('Saved locally. I will retry when the server is available');
       DOM.form.reset();
       setTimeout(() => { window.location.href = 'index.html'; }, 900);
-    } else {
+    } catch (e) {
       DOM.status.textContent = 'Failed to save feedback locally.';
-      console.error('feedback save error');
+      console.error('feedback save error', e);
       speak('Failed to save feedback locally');
     }
   });
 
-  // background retry attempt (silent) — posts queued items to Formspree
+  // background retry attempt (silent)
   (async function tryFlushQueue(){
     try {
       const key = 'neun_feedback_queue';
       const q = JSON.parse(localStorage.getItem(key) || '[]');
       if (!q.length) return;
-      const endpoint = getEndpoint();
       for (let i = 0; i < q.length; i++) {
         try {
-          const item = q[i];
-          const resp = await fetch(endpoint, {
+          const r = await fetch('/feedback', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
-            body: JSON.stringify({ name: item.name, message: item.message })
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(q[i])
           });
-          if (resp.ok) {
+          if (r.ok) {
             q.splice(i, 1);
             i--;
-          } else {
-            // stop trying further to avoid rate limits/errors
-            break;
           }
         } catch (er) {
           break;
@@ -208,7 +189,7 @@ document.addEventListener('DOMContentLoaded', () => {
     } catch (e) { /* ignore */ }
   })();
 
-  // Initialize continuous voice (toggleable)
+  // Initialize continuous voice (toggleable & auto-on)
   initFeedbackVoice();
 });
 
@@ -226,6 +207,7 @@ function initFeedbackVoice() {
   rec.continuous = true; // continuous listening
 
   let listening = false;
+  let userRequestedOn = false;
 
   function updateUI() {
     if (!DOM.listenBtn) return;
@@ -235,14 +217,21 @@ function initFeedbackVoice() {
   }
 
   // Toggle continuous listening on click
-  DOM.listenBtn.addEventListener('click', () => {
-    try {
-      if (!listening) rec.start();
-      else rec.stop();
-    } catch (e) {
-      console.warn('rec toggle error', e);
-    }
-  });
+  if (DOM.listenBtn) {
+    DOM.listenBtn.addEventListener('click', () => {
+      try {
+        if (!listening) {
+          userRequestedOn = true;
+          rec.start();
+        } else {
+          userRequestedOn = false;
+          rec.stop();
+        }
+      } catch (e) {
+        console.warn('rec toggle error', e);
+      }
+    });
+  }
 
   rec.onstart = () => {
     listening = true;
@@ -251,12 +240,12 @@ function initFeedbackVoice() {
   };
 
   rec.onend = () => {
-    // If listening flag is true, restart to maintain continuous mode.
-    // If user clicked stop (listening == false), then don't restart.
-    if (listening) {
+    listening = false;
+    updateUI();
+    if (userRequestedOn) {
+      // auto-restart for continuous mode
       try { rec.start(); } catch (e) { console.warn('restart failed', e); }
     } else {
-      updateUI();
       speak('Stopped listening');
     }
   };
@@ -265,10 +254,18 @@ function initFeedbackVoice() {
     console.warn('feedback voice error', err);
     if (DOM.status) DOM.status.textContent = 'Voice error';
     listening = false;
+    userRequestedOn = false;
     updateUI();
   };
 
   rec.onresult = (e) => {
+    const now = Date.now();
+    // ignore our own speech
+    if (now < (window.__FB_SPEAKING_UNTIL || 0)) {
+      console.log('[feedback voice] ignored during self-speech');
+      return;
+    }
+
     const text = (e.results[e.resultIndex][0].transcript || '').trim();
     const lower = text.toLowerCase();
     if (!text) return;
@@ -276,7 +273,20 @@ function initFeedbackVoice() {
     if (DOM.status) DOM.status.textContent = `Heard: "${text}"`;
     speak(`Heard: ${text}`);
 
-    // Commands: navigation
+    // STOP LISTENING via voice
+    if (
+      lower.includes('stop listening') ||
+      lower.includes('stop listing') ||
+      lower.includes('stop voice') ||
+      lower.includes('mic off')
+    ) {
+      userRequestedOn = false;
+      try { rec.stop(); } catch {}
+      if (DOM.status) DOM.status.textContent = 'Stopped listening by voice command';
+      return;
+    }
+
+    // Commands: navigation to Sudoku
     if (lower.includes('sudoku') || lower.includes('go back') || lower.includes('back')) {
       speak('Going back to Sudoku');
       window.location.href = 'index.html';
@@ -284,7 +294,12 @@ function initFeedbackVoice() {
     }
 
     // Submit
-    if (lower.includes('send') || lower.includes('submit') || lower.includes('send feedback')) {
+    if (
+      lower.includes('send feedback') ||
+      lower.includes('submit feedback') ||
+      lower === 'send' ||
+      lower === 'submit'
+    ) {
       speak('Submitting feedback');
       DOM.sendBtn?.click();
       return;
@@ -340,4 +355,12 @@ function initFeedbackVoice() {
     DOM.status.textContent = `Unrecognized: "${text}"`;
     speak('Command not recognized');
   };
+
+  // 🔥 Auto-start mic like Sudoku page (where browser allows)
+  try {
+    userRequestedOn = true;
+    rec.start();
+  } catch (e) {
+    console.warn('feedback auto-start may be blocked until user interacts', e);
+  }
 }
