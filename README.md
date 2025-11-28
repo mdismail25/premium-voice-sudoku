@@ -1,8 +1,3 @@
-📄 **README.md**
-
----
-
-````markdown
 # 🧠 Premium Voice Sudoku
 
 An **accessible, voice-first Sudoku game** with a futuristic neon UI, designed so it can be played even by **visually impaired / low-vision users** using speech input and audio output.
