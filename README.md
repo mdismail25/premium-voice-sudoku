@@ -193,12 +193,13 @@ You are free to use, study, modify, and improve this software.
 ---
 
 ## ✨ Credits
+This project is designed and developed by:
 
-Developed by **Mohammed Ismail Y**
-as a Final Year Major Project focusing on **Assistive Technology**
-and digital accessibility for visually impaired users.
+Mohammed Ismail Y
+USN: 4VZ23CS401
+VTU Mysore — Department of CSE
 
-> “Innovation should include everyone — with or without sight.” 🌟
+“Technology should empower everyone — with or without sight.” 🌟
 
 ---
 
@@ -206,17 +207,3 @@ and digital accessibility for visually impaired users.
 
 ---
 
-### 🔥 Done!
-
-If you want, I can also add:
-
-✔ Your **College Name, VTU USN, Department, Guide Faculty Name**  
-✔ A **Project Abstract + Problem Statement + Objectives section**  
-✔ A **PDF Project Report** formatted for VTU submission  
-✔ A **PPT for viva presentation**  
-✔ A **QR Code** to your live website in README  
-✔ Badges (Vercel deploy, License, Tech stack icons)
-
-Would you like me to **personalize** the top with your college & department details?  
-(Example: *“Department of Computer Science & Engineering — VTU, Mysuru”*)
-```
