@@ -203,7 +203,4 @@ VTU Mysore — Department of CSE
 
 ---
 
-```
-
----
 
